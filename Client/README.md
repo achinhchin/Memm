@@ -1,5 +1,7 @@
 # Memm — Client
 
+Part of the [Memm](../README.md) repository.
+
 Dark, minimal front end for Memm. Plain HTML, CSS and JavaScript — no build
 step, no framework, no runtime dependencies. The files are split for editing;
 the server inlines them into a single cached HTML document before sending, so
@@ -7,14 +9,15 @@ the browser makes one request.
 
 ## Run
 
-This repo is not served on its own. Clone it next to the Server repo and point
-the server at it:
+The client is not served on its own — the Go server inlines and serves it:
 
 ```sh
-git clone <client-repo> Client
-git clone <server-repo> Server
-cd Server && CLIENT_DIR=../Client go run ./cmd/memm
+git clone <this-repo> Memm
+cd Memm/Server && go run ./cmd/memm
 ```
+
+The server finds these files through `CLIENT_DIR`, which defaults to
+`../Client` and so resolves correctly from `Server/` in this repository.
 
 Then open <https://localhost:5050>. While editing, run the server with `DEV=1`
 so the bundle is rebuilt on every request instead of cached.

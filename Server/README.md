@@ -1,5 +1,7 @@
 # Memm — Server
 
+Part of the [Memm](../README.md) repository.
+
 Go + MongoDB backend for Memm, a journal that records **when** as carefully as
 **what**. It stores audio, video, images, markdown and handwritten strokes,
 each with a real start and end time, and serves the client on the same port.
@@ -22,9 +24,8 @@ brew services start mongodb-community
 ## Run
 
 ```sh
-git clone <server-repo> Server
-git clone <client-repo> Client      # sibling directory; see CLIENT_DIR
-cd Server
+git clone <this-repo> Memm
+cd Memm/Server
 cp .env.example .env                # then edit if needed
 ./scripts/gencert.sh                # self-signed cert for https
 go run ./cmd/memm
@@ -39,7 +40,7 @@ Open <https://localhost:5050>. For plain http while testing, set `TLS=0`.
 | `ADDR` | `:5050` | listen address; client and API share this port |
 | `MONGO_URI` | `mongodb://localhost:27017` | connection string |
 | `MONGO_DB` | `memm` | database name |
-| `CLIENT_DIR` | `../Client` | path to the Client repo checkout |
+| `CLIENT_DIR` | `../Client` | path to the client, a sibling directory in this repo |
 | `TLS` | `1` | `0` serves plain http |
 | `CERT_FILE` / `KEY_FILE` | `./certs/cert.pem`, `./certs/key.pem` | TLS material |
 | `DATA_DIR` | `./data` | blob storage root |
@@ -118,6 +119,6 @@ internal/api            HTTP handlers, middleware, client bundler
 ```
 
 The client is served from the same port: `internal/api/client.go` inlines the
-Client repo's split CSS/JS into one HTML document and caches it in RAM, so the
+client's split CSS/JS into one HTML document and caches it in RAM, so the
 browser makes a single request with no waterfall. Set `DEV=1` to rebuild it on
 each request while editing.
