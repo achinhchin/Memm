@@ -1,0 +1,88 @@
+/* ---- timeline ----------------------------------------------------------- */
+.tl{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;touch-action:none}
+.tl-ruler{
+  flex:none;height:34px;position:relative;border-bottom:1px solid var(--line-soft);
+  background:var(--bg-2);overflow:hidden;
+}
+.tl-ruler .tick{position:absolute;top:0;bottom:0;border-left:1px solid var(--line-soft);padding-left:6px;
+  font-size:10.5px;color:var(--text-3);font-family:var(--mono);display:flex;align-items:center;white-space:nowrap;
+  will-change:transform}
+.tl-ruler .tick.major{border-left-color:var(--line);color:var(--text-2)}
+
+.tl-body{flex:1;min-height:0;position:relative;overflow-y:auto;overflow-x:hidden;cursor:grab}
+.tl-body.dragging{cursor:grabbing}
+.tl-grid{position:absolute;inset:0;pointer-events:none}
+.tl-grid i{position:absolute;top:0;bottom:0;width:1px;background:var(--line-soft);opacity:.55;will-change:transform}
+
+.lane{position:relative;height:64px;border-bottom:1px solid var(--line-soft)}
+.lane-label{
+  position:sticky;left:0;z-index:3;float:left;width:var(--lane-w);height:100%;
+  display:flex;align-items:center;gap:7px;padding-left:12px;font-size:12px;color:var(--text-3);
+  background:linear-gradient(90deg,var(--bg) 72%,transparent);pointer-events:none;
+}
+.lane-label svg{color:var(--k)}
+.lane-track{position:absolute;inset:0;overflow:hidden}
+
+.blk{
+  position:absolute;top:9px;height:46px;min-width:3px;border-radius:7px;
+  background:color-mix(in srgb,var(--k) 20%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--k) 42%,transparent);
+  overflow:hidden;cursor:pointer;will-change:transform,width;
+  transition:border-color var(--fast) var(--ease),filter var(--fast) var(--ease);
+  display:flex;align-items:center;
+}
+.blk:hover{border-color:var(--k);filter:brightness(1.18);z-index:2}
+.blk.sel{border-color:var(--k);box-shadow:0 0 0 2px color-mix(in srgb,var(--k) 35%,transparent)}
+.blk.live{border-style:dashed;animation:pulse 1.6s var(--ease) infinite}
+.blk img{width:46px;height:100%;object-fit:cover;flex:none;opacity:.9}
+.blk .t{padding:0 8px;font-size:11.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.blk .wave{position:absolute;inset:0;display:flex;align-items:center;gap:1px;padding:0 3px;opacity:.5;pointer-events:none}
+.blk .wave i{flex:1;background:var(--k);border-radius:.5px;min-height:1px}
+/* Sub-pixel blocks still need to be findable, so give them a visible dot. */
+.blk.tiny{border-radius:3px;background:var(--k)}
+.blk.tiny .t,.blk.tiny img,.blk.tiny .wave{display:none}
+
+.tl-now{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);opacity:.55;pointer-events:none;z-index:4}
+.tl-now::before{content:"";position:absolute;top:0;left:-3px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+
+.tl-hud{
+  position:absolute;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:20;
+  display:flex;flex-direction:column;gap:4px;padding:5px;border-radius:var(--r-m);
+}
+.tl-hud button{width:32px;height:32px;display:grid;place-items:center;border-radius:var(--r-s);color:var(--text-2)}
+.tl-hud button:hover{background:var(--surface-2);color:var(--text)}
+.tl-scale{
+  position:absolute;left:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:20;
+  padding:5px 11px;border-radius:var(--r-full);font-size:11.5px;font-family:var(--mono);color:var(--text-2);
+}
+
+/* ---- list view ---------------------------------------------------------- */
+.list{position:absolute;inset:0;overflow-y:auto;padding:14px 14px 120px}
+.day{margin-bottom:22px}
+.day-head{
+  position:sticky;top:0;z-index:5;display:flex;align-items:baseline;gap:9px;
+  padding:7px 2px;margin-bottom:9px;
+  background:linear-gradient(var(--bg) 62%,transparent);
+}
+.day-head h3{font-size:13px;font-weight:600;letter-spacing:.02em}
+.day-head span{font-size:11.5px;color:var(--text-3)}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:10px}
+.item{display:flex;gap:11px;padding:11px;cursor:pointer;align-items:flex-start}
+.item:hover{border-color:var(--line);transform:translateY(-1px)}
+.item .thumb{
+  width:52px;height:52px;flex:none;border-radius:var(--r-s);overflow:hidden;
+  display:grid;place-items:center;background:var(--k-soft);color:var(--k);position:relative;
+}
+.item .thumb img{width:100%;height:100%;object-fit:cover}
+.item .thumb .wave{position:absolute;inset:0;display:flex;align-items:center;gap:1px;padding:0 4px}
+.item .thumb .wave i{flex:1;background:var(--k);border-radius:.5px;min-height:1px;opacity:.75}
+.item h4{font-size:13px;font-weight:500;margin-bottom:3px}
+.item .sub{font-size:11.5px;color:var(--text-3);font-family:var(--mono)}
+.item .snippet{font-size:12px;color:var(--text-2);margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+@media (max-width:600px){.items{grid-template-columns:1fr}}
+
+/* ---- stroke canvas ------------------------------------------------------ */
+.pad{width:100%;aspect-ratio:4/3;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r-m);touch-action:none;cursor:crosshair;display:block}
+.pen-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.swatch{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:transform var(--fast) var(--ease)}
+.swatch[aria-pressed="true"]{border-color:var(--text);transform:scale(1.12)}
