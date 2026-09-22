@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# editors
+.idea/
+.vscode/
+
+# Per-component ignores live in Server/.gitignore and Client/.gitignore, where
+# their anchored patterns resolve against the right directory.
