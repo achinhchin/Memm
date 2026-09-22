@@ -6,10 +6,12 @@ const ic = M.icons;
 
 M.list = { mount(root) {
   root.innerHTML = '';
+  let oldest = null;
   const scroller = el('div', { class: 'list' });
   root.append(scroller);
 
   const render = () => {
+    oldest = null;            // filters changed under us; re-arm paging
     const entries = M.store.visible();
     if (!entries.length) {
       scroller.innerHTML = `<div class="empty">${ic('inbox', 40)}
@@ -64,7 +66,6 @@ M.list = { mount(root) {
   };
 
   /* Paging: when the user nears the bottom, widen the loaded window backwards. */
-  let oldest = null;
   const more = debounce(() => {
     const es = M.store.visible();
     if (!es.length) return;

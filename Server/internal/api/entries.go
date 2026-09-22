@@ -15,11 +15,14 @@ import (
 // handleList powers both views. The timeline asks for everything overlapping a
 // window; the list view pages backwards from a cursor.
 //
-//	?from,to   RFC3339 window (overlap, not containment)
-//	?kind      comma-separated kinds
-//	?before    pagination cursor (RFC3339 startsAt)
-//	?limit     default 200, max 1000
-//	?q         title/tag substring
+//	?from,to      RFC3339 window (overlap, not containment)
+//	?kind         comma-separated kinds
+//	?before       pagination cursor (RFC3339 startsAt)
+//	?limit        default 200, max 1000
+//	?q            title/tag/text substring
+//	?minMs,maxMs  duration bounds in milliseconds
+//	?tag          comma-separated tags, matching any of them
+//	?status       recording | ready | failed
 func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	filter := bson.M{"userId": user(r).ID}
@@ -44,6 +47,24 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 	if before, ok := parseTime(q.Get("before")); ok {
 		filter["startsAt"] = mergeLT(filter["startsAt"], before)
+	}
+	if dur := durationRange(q.Get("minMs"), q.Get("maxMs")); dur != nil {
+		filter["durationMs"] = dur
+	}
+	if t := q.Get("tag"); t != "" {
+		tags := []string{}
+		for _, v := range strings.Split(t, ",") {
+			if v = strings.TrimSpace(v); v != "" {
+				tags = append(tags, v)
+			}
+		}
+		if len(tags) > 0 {
+			filter["tags"] = bson.M{"$in": tags}
+		}
+	}
+	switch st := q.Get("status"); st {
+	case models.StatusRecording, models.StatusReady, models.StatusFailed:
+		filter["status"] = st
 	}
 	if term := strings.TrimSpace(q.Get("q")); term != "" {
 		rx := bson.M{"$regex": regexQuote(term), "$options": "i"}
@@ -128,6 +149,7 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e.ID = res.InsertedID.(bson.ObjectID)
+	s.emitEntry(e.UserID, &e)
 	send(w, http.StatusCreated, e)
 }
 
@@ -184,6 +206,7 @@ func (s *Server) handlePatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e, _ = s.load(r, e.ID)
+	s.emitEntry(user(r).ID, e)
 	send(w, http.StatusOK, e)
 }
 
@@ -199,6 +222,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	s.blobs.Discard(e.ID.Hex())
 	s.releaseBlob(r, e.Blob)
 	s.releaseBlob(r, e.Thumb)
+	s.emitDelete(user(r).ID, e.ID)
 	send(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -259,6 +283,22 @@ func validKind(k string) bool {
 		return true
 	}
 	return false
+}
+
+// durationRange builds a durationMs constraint from the two bounds, returning
+// nil when neither is usable so the field is left unfiltered.
+func durationRange(minV, maxV string) bson.M {
+	m := bson.M{}
+	if n, err := strconv.ParseInt(minV, 10, 64); err == nil && n > 0 {
+		m["$gte"] = n
+	}
+	if n, err := strconv.ParseInt(maxV, 10, 64); err == nil && n > 0 {
+		m["$lte"] = n
+	}
+	if len(m) == 0 {
+		return nil
+	}
+	return m
 }
 
 func parseTime(v string) (time.Time, bool) {

@@ -103,16 +103,57 @@
 .empty{display:grid;place-items:center;height:100%;gap:10px;color:var(--text-3);text-align:center;padding:24px}
 .empty svg{color:var(--line);width:40px;height:40px}
 
-/* ---- recording pill ----------------------------------------------------- */
-.rec{
-  position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--nav-h) + 14px);z-index:50;
-  display:flex;align-items:center;gap:12px;padding:9px 10px 9px 16px;border-radius:var(--r-full);
+/* ---- recording overlay -------------------------------------------------- */
+.rec-stage{
+  position:fixed;inset:0;z-index:55;display:grid;place-items:center;
+  background:rgba(6,8,11,.86);backdrop-filter:blur(8px);
+  padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));
+  animation:fade var(--med) var(--ease);
 }
-.rec .blip{width:9px;height:9px;border-radius:50%;background:var(--danger);animation:pulse 1.4s var(--ease) infinite}
+.rec-video{
+  width:100%;max-width:min(920px,100%);max-height:calc(100dvh - 150px);
+  border-radius:var(--r-l);background:#000;object-fit:contain;
+  transform:scaleX(-1);box-shadow:var(--shadow);
+}
+.rec{
+  display:flex;align-items:center;gap:10px;padding:9px 10px 9px 14px;border-radius:var(--r-full);
+  flex-wrap:nowrap;max-width:calc(100vw - 32px);
+}
+.rec-stage .rec{position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(22px + env(safe-area-inset-bottom))}
+body > .rec{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--nav-h) + 14px);z-index:55}
+.rec .blip{width:9px;height:9px;border-radius:50%;background:var(--danger);animation:pulse 1.4s var(--ease) infinite;flex:none}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
-.rec .t{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
-.rec .lvl{width:52px;height:20px;display:flex;align-items:center;gap:2px}
-.rec .lvl i{flex:1;background:var(--audio);border-radius:1px;height:10%;transition:height .08s linear;opacity:.8}
+.rec .t{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;flex:none}
+
+/* level meter: fill is RMS, the tick is a held peak */
+.rec .meter{
+  position:relative;width:132px;height:8px;flex:none;
+  background:var(--bg-2);border-radius:var(--r-full);overflow:hidden;
+  box-shadow:inset 0 0 0 1px var(--line-soft);
+}
+.rec .meter .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--ok);
+  border-radius:var(--r-full);transition:width .06s linear,background .12s linear}
+.rec .meter .peak{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--text);opacity:.85;border-radius:1px}
+/* the last 3dB is the clipping zone */
+.rec .meter::after{content:"";position:absolute;right:0;top:0;bottom:0;width:5%;
+  background:var(--danger);opacity:.22;pointer-events:none}
+.rec .db{font-size:11.5px;color:var(--text-2);min-width:52px;text-align:right;flex:none}
+.rec .advice{font-size:11.5px;color:var(--text-3);min-width:56px;flex:none}
+.rec .advice.bad{color:var(--danger);font-weight:600}
+.rec .advice.warn{color:var(--image)}
+
+@media (max-width:640px){
+  .rec{gap:7px;padding:8px 8px 8px 12px}
+  .rec .meter{width:80px}
+  .rec .db{min-width:44px;font-size:11px}
+  .rec .advice{display:none}
+  .rec-video{max-height:calc(100dvh - 130px)}
+}
+@media (max-width:400px){
+  .rec .meter{width:56px}
+  .rec .t{font-size:12px}
+}
 
 /* ---- media preview ------------------------------------------------------ */
 .viewer-media{background:#000;border-radius:var(--r-m);overflow:hidden;display:grid;place-items:center;max-height:52dvh}
@@ -136,3 +177,21 @@
 .md-preview blockquote{border-left:2px solid var(--line);margin:.6em 0;padding-left:12px;color:var(--text-2)}
 .md-preview ul,.md-preview ol{margin:.5em 0;padding-left:1.3em}
 .md-preview a{text-decoration:underline;text-underline-offset:2px}
+
+/* ---- advanced filter button --------------------------------------------- */
+.chip.adv{gap:5px}
+.chip.adv.on{color:var(--text);border-color:transparent;background:var(--accent-soft)}
+.chip.adv.on::after{
+  content:attr(data-n);min-width:16px;height:16px;padding:0 4px;
+  display:grid;place-items:center;border-radius:var(--r-full);
+  background:var(--accent);color:#0b0d10;font-size:10px;font-weight:700;
+}
+.chip.adv:not(.on)::after{content:none}
+
+/* Filter panel fields wrap rather than overflow on a phone. */
+.modal-body .field .row > .input[type="datetime-local"]{flex:1;min-width:150px}
+@media (max-width:600px){
+  .modal-body .field .row{width:100%}
+  .modal-body .field .row > .input{flex:1 1 100%}
+  .modal-body .field .row > .input[type="number"]{flex:1 1 40%;width:auto}
+}

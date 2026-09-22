@@ -104,15 +104,19 @@ const strokeView = e => {
     const ctx = cv.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.lineCap = ctx.lineJoin = 'round';
-    for (const s of strokes) {
-      ctx.strokeStyle = s.c; ctx.lineWidth = s.w;
+    for (const st of strokes) {
+      // e:1 marks an eraser stroke; replay it the same way the pad drew it.
+      ctx.globalCompositeOperation = st.e ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = st.c; ctx.lineWidth = st.w;
       ctx.beginPath();
-      for (let i = 0; i < s.p.length; i += 2) {
-        const x = s.p[i] * r.width, y = s.p[i + 1] * r.height;
+      for (let i = 0; i < st.p.length; i += 2) {
+        const x = st.p[i] * r.width, y = st.p[i + 1] * r.height;
         i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
       }
+      if (st.p.length === 2) ctx.lineTo(st.p[0] * r.width + 0.01, st.p[1] * r.height);
       ctx.stroke();
     }
+    ctx.globalCompositeOperation = 'source-over';
   };
   new ResizeObserver(draw).observe(cv);
   setTimeout(draw, 0);

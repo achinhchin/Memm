@@ -64,8 +64,19 @@ async function record(kind) {
     return toast(e.name === 'NotAllowedError' ? 'Microphone/camera permission denied' : e.message, 'err');
   }
 
+  // Every video candidate names an AUDIO codec alongside the video one. A
+  // string like 'video/mp4;codecs=avc1' is accepted by isTypeSupported but
+  // records picture only, which is how sound went missing from clips: the
+  // camera track and the microphone track belong in one file, not two.
   const mime = wantVideo
-    ? pickMime(['video/mp4;codecs=avc1', 'video/webm;codecs=vp9,opus', 'video/webm'])
+    ? pickMime([
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+        'video/mp4;codecs=h264,aac',
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4',
+      ])
     : pickMime(['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']);
 
   const startedAt = new Date();
@@ -88,38 +99,68 @@ async function record(kind) {
   rec.ondataavailable = ev => up.push(ev.data);
   rec.start(2000);   // a slice every 2s: small enough to stream, few enough requests
 
-  /* HUD */
+  /* overlay: preview + level metering */
   const pill = el('div', { class: 'rec glass' });
   const time = el('span', { class: 't' }, '0:00');
-  const lvl = el('div', { class: 'lvl' });
-  for (let i = 0; i < 7; i++) lvl.append(el('i'));
+  const meter = el('div', { class: 'meter' });
+  const meterFill = el('i', { class: 'fill' });
+  const meterPeak = el('i', { class: 'peak' });
+  meter.append(meterFill, meterPeak);
+  const dbRead = el('span', { class: 'db mono' }, '-\u221e dB');
+  const advice = el('span', { class: 'advice' }, '');
   const stop = el('button', { class: 'btn btn-danger btn-icon', title: 'Stop recording' }, ic('stop', 15));
-  pill.append(el('span', { class: 'blip' }), time, lvl, stop);
-  document.body.append(pill);
+  pill.append(el('span', { class: 'blip' }), time, meter, dbRead, advice, stop);
 
-  let preview = null;
+  let preview = null, shell = null;
   if (wantVideo) {
-    preview = el('video', { autoplay: '', muted: '', playsinline: '',
-      style: 'position:fixed;right:14px;top:calc(var(--nav-h) + 14px);width:200px;border-radius:12px;z-index:50;box-shadow:var(--shadow);transform:scaleX(-1)' });
+    // A real preview, sized to the viewport, so framing is checkable on a
+    // phone as well as a desktop.
+    shell = el('div', { class: 'rec-stage' });
+    preview = el('video', { autoplay: true, muted: true, playsinline: true, class: 'rec-video' });
     preview.srcObject = stream;
-    document.body.append(preview);
+    preview.muted = true;                  // property, not just the attribute
+    shell.append(preview, pill);
+    document.body.append(shell);
+  } else {
+    document.body.append(pill);
   }
 
-  /* mic level meter */
-  let ac, raf;
+  /* Level metering. RMS drives the bar and the dB readout; a separate peak
+     detector catches the brief transients that actually cause clipping. */
+  let ac, raf, peakHold = 0, peakAt = 0, clipped = false;
   try {
     ac = new (window.AudioContext || window.webkitAudioContext)();
-    const an = ac.createAnalyser(); an.fftSize = 256;
+    const an = ac.createAnalyser();
+    an.fftSize = 1024;
+    an.smoothingTimeConstant = 0.3;
     ac.createMediaStreamSource(stream).connect(an);
-    const buf = new Uint8Array(an.frequencyBinCount);
-    const bars = [...lvl.children];
+    const buf = new Float32Array(an.fftSize);
     const loop = () => {
-      an.getByteFrequencyData(buf);
-      const band = Math.floor(buf.length / bars.length);
-      bars.forEach((b, i) => {
-        let s = 0; for (let j = 0; j < band; j++) s += buf[i * band + j];
-        b.style.height = Math.max(10, Math.min(100, (s / band) / 1.4)) + '%';
-      });
+      an.getFloatTimeDomainData(buf);
+      let sum = 0, peak = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const v = buf[i];
+        sum += v * v;
+        const a = Math.abs(v);
+        if (a > peak) peak = a;
+      }
+      const rms = Math.sqrt(sum / buf.length);
+      const db = rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+
+      // -60dB..0dB mapped across the bar.
+      const pct = Math.max(0, Math.min(100, ((db + 60) / 60) * 100));
+      meterFill.style.width = pct + '%';
+      meterFill.style.background = db > -3 ? 'var(--danger)' : db > -12 ? 'var(--image)' : 'var(--ok)';
+
+      const now = performance.now();
+      if (peak >= peakHold || now - peakAt > 900) { peakHold = peak; peakAt = now; }
+      const peakDb = peakHold > 0 ? 20 * Math.log10(peakHold) : -Infinity;
+      meterPeak.style.left = Math.max(0, Math.min(100, ((peakDb + 60) / 60) * 100)) + '%';
+
+      if (peak >= 0.99) clipped = true;
+      dbRead.textContent = db === -Infinity ? '-\u221e dB' : db.toFixed(0) + ' dB';
+      advice.textContent = peak >= 0.99 ? 'clipping' : db < -45 ? 'too quiet' : '';
+      advice.className = 'advice' + (peak >= 0.99 ? ' bad' : db < -45 ? ' warn' : '');
       raf = requestAnimationFrame(loop);
     };
     loop();
@@ -130,12 +171,13 @@ async function record(kind) {
   const finish = async () => {
     stop.disabled = true;
     stop.innerHTML = '<span class="spin"></span>';
-    clearInterval(t); cancelAnimationFrame(raf); ac?.close().catch(() => {});
+    clearInterval(t); cancelAnimationFrame(raf); ac?.close?.().catch?.(() => {});
     if (rec.state !== 'inactive') {
       await new Promise(res => { rec.onstop = res; rec.stop(); });
     }
     stream.getTracks().forEach(x => x.stop());
-    preview?.remove();
+    if (preview) preview.srcObject = null;
+    shell?.remove();
     try {
       await up.drain();
       const done = await M.api.finish(entry.id, {
@@ -146,11 +188,12 @@ async function record(kind) {
         maxW: 1280, crf: 26,
       });
       M.store.upsert(done); M.store.emit();
-      toast(`${wantVideo ? 'Video' : 'Audio'} saved · ${fmtDur(done.durationMs)} · ${fmtBytes(done.size)}`);
+      toast(`${wantVideo ? 'Video' : 'Audio'} saved · ${fmtDur(done.durationMs)} · ${fmtBytes(done.size)}` +
+            (clipped ? ' · input clipped' : ''), clipped ? 'err' : 'ok');
       M.viewer.open(done.id);
     } catch (e) {
       toast('Upload failed: ' + e.message, 'err');
-    } finally { pill.remove(); }
+    } finally { pill.remove(); shell?.remove(); }
   };
 
   stop.onclick = finish;
@@ -257,8 +300,27 @@ async function writeMarkdown(existing) {
   done.onclick = async () => { await save(); m.close(); };
 }
 
-/* ---- stroke pad ---------------------------------------------------------- */
-const PENS = ['#e6e9ee', '#6f8fd6', '#7fb3a6', '#c2a173', '#b58aa8', '#c97b7b'];
+/* ---- stroke pad ----------------------------------------------------------
+   Five pen slots, each carrying its own colour and width, plus an eraser with
+   a width of its own. Slots persist, so a pen set up once stays set up.     */
+const DEFAULT_PENS = [
+  { c: '#e6e9ee', w: 3 },
+  { c: '#6f8fd6', w: 5 },
+  { c: '#7fb3a6', w: 2 },
+  { c: '#c2a173', w: 8 },
+  { c: '#b58aa8', w: 14 },
+];
+const loadPens = () => {
+  try {
+    const v = JSON.parse(localStorage.getItem('memm.pens') || 'null');
+    if (Array.isArray(v) && v.length === 5) return v.map((p, i) => ({ ...DEFAULT_PENS[i], ...p }));
+  } catch {}
+  return DEFAULT_PENS.map(p => ({ ...p }));
+};
+const savePens = (pens, eraserW) => {
+  localStorage.setItem('memm.pens', JSON.stringify(pens));
+  localStorage.setItem('memm.eraser', String(eraserW));
+};
 
 async function drawStroke(existing) {
   let entry = existing;
@@ -271,32 +333,81 @@ async function drawStroke(existing) {
     M.store.upsert(entry); M.store.emit();
   }
 
-  // Strokes are stored in normalized 0..1 coordinates so a note drawn on a
-  // phone replays correctly on a desktop canvas.
+  // Strokes are stored in normalised 0..1 coordinates so a note drawn on a
+  // phone replays correctly on a desktop canvas. An erase stroke is an
+  // ordinary stroke flagged with e:1 and composited as destination-out, which
+  // keeps the whole drawing a replayable vector list.
   let strokes = [];
   try { strokes = JSON.parse(entry.text || '[]'); } catch {}
+
+  const pens = loadPens();
+  let eraserW = Number(localStorage.getItem('memm.eraser')) || 18;
+  let slot = 0, erasing = false;
 
   const body = el('div', { class: 'col', style: 'gap:10px' });
   const titleIn = el('input', { class: 'input', placeholder: 'Title', value: entry.title || '' });
   const pad = el('canvas', { class: 'pad' });
-  const tools = el('div', { class: 'pen-row' });
-  let color = PENS[0], width = 3;
 
-  PENS.forEach((c, i) => {
-    const s = el('button', { class: 'swatch', style: `background:${c}`, 'aria-pressed': i === 0, 'aria-label': 'Pen colour' });
-    s.onclick = () => { color = c; [...tools.querySelectorAll('.swatch')].forEach(x => x.ariaPressed = 'false'); s.ariaPressed = 'true'; };
-    tools.append(s);
+  const slots = el('div', { class: 'pen-slots' });
+  const eraserBtn = el('button', { class: 'pen-slot eraser', title: 'Eraser', 'aria-pressed': false },
+    ic('stroke', 15));
+  const editor = el('div', { class: 'pen-editor' });
+  const colorIn = el('input', { type: 'color', class: 'pen-color', 'aria-label': 'Pen colour' });
+  const sizeIn = el('input', { type: 'range', min: 1, max: 48, step: 1, class: 'pen-size', 'aria-label': 'Size' });
+  const sizeOut = el('span', { class: 'mono dim pen-size-out' });
+  const dot = el('span', { class: 'pen-preview' });
+
+  const current = () => (erasing ? { c: '#ffffff', w: eraserW } : pens[slot]);
+  const syncEditor = () => {
+    const cur = current();
+    colorIn.value = cur.c;
+    colorIn.disabled = erasing;          // an eraser has no colour to pick
+    sizeIn.value = cur.w;
+    sizeOut.textContent = cur.w + ' px';
+    dot.style.width = dot.style.height = Math.max(4, Math.min(30, cur.w)) + 'px';
+    dot.style.background = erasing ? 'var(--line)' : cur.c;
+    dot.style.borderStyle = erasing ? 'dashed' : 'solid';
+    slots.querySelectorAll('.pen-slot').forEach((b, i) => b.setAttribute('aria-pressed', String(!erasing && i === slot)));
+    eraserBtn.setAttribute('aria-pressed', String(erasing));
+  };
+
+  pens.forEach((p, i) => {
+    const b = el('button', { class: 'pen-slot', 'aria-pressed': i === 0, title: `Pen ${i + 1}` });
+    const swatch = el('span', { class: 'pen-dot' });
+    b.append(swatch);
+    b.onclick = () => { erasing = false; slot = i; syncEditor(); };
+    slots.append(b);
   });
-  const widthIn = el('input', { type: 'range', min: 1, max: 14, value: 3, style: 'width:100px' });
-  widthIn.oninput = () => { width = +widthIn.value; };
+  slots.append(eraserBtn);
+  eraserBtn.onclick = () => { erasing = true; syncEditor(); };
+
+  const paintSlots = () => slots.querySelectorAll('.pen-dot').forEach((d, i) => {
+    d.style.background = pens[i].c;
+    d.style.width = d.style.height = Math.max(6, Math.min(22, pens[i].w)) + 'px';
+  });
+
+  colorIn.oninput = () => { if (!erasing) { pens[slot].c = colorIn.value; paintSlots(); syncEditor(); savePens(pens, eraserW); } };
+  sizeIn.oninput = () => {
+    const w = +sizeIn.value;
+    if (erasing) eraserW = w; else pens[slot].w = w;
+    paintSlots(); syncEditor(); savePens(pens, eraserW);
+  };
+
+  editor.append(dot, colorIn, sizeIn, sizeOut);
+
   const undo = el('button', { class: 'btn btn-sm' }, 'Undo');
   const clear = el('button', { class: 'btn btn-sm btn-danger' }, 'Clear');
-  tools.append(el('div', { class: 'grow' }), widthIn, undo, clear);
+  const actions = el('div', { class: 'pen-actions' });
+  actions.append(undo, clear);
+
+  const tools = el('div', { class: 'pen-row' });
+  tools.append(slots, editor, actions);
   body.append(titleIn, pad, tools);
 
   const ctx = pad.getContext('2d');
   const fit = () => {
     const r = pad.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+    if (!r.width) return;
     pad.width = Math.round(r.width * dpr); pad.height = Math.round(r.height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     redraw();
@@ -305,23 +416,29 @@ async function drawStroke(existing) {
     const r = pad.getBoundingClientRect();
     ctx.clearRect(0, 0, r.width, r.height);
     ctx.lineCap = ctx.lineJoin = 'round';
-    for (const s of strokes) {
-      ctx.strokeStyle = s.c; ctx.lineWidth = s.w;
+    for (const st of strokes) {
+      ctx.globalCompositeOperation = st.e ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = st.c; ctx.lineWidth = st.w;
       ctx.beginPath();
-      for (let i = 0; i < s.p.length; i += 2) {
-        const x = s.p[i] * r.width, y = s.p[i + 1] * r.height;
+      for (let i = 0; i < st.p.length; i += 2) {
+        const x = st.p[i] * r.width, y = st.p[i + 1] * r.height;
         i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
       }
+      // A single tap has no second point, so stroke() alone draws nothing.
+      if (st.p.length === 2) ctx.lineTo(st.p[0] * r.width + 0.01, st.p[1] * r.height);
       ctx.stroke();
     }
+    ctx.globalCompositeOperation = 'source-over';
   };
 
   let cur = null;
   const pt = ev => { const r = pad.getBoundingClientRect(); return [(ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height]; };
   pad.addEventListener('pointerdown', ev => {
     pad.setPointerCapture(ev.pointerId);
-    cur = { c: color, w: width, p: pt(ev) };
+    const c = current();
+    cur = erasing ? { c: c.c, w: c.w, e: 1, p: pt(ev) } : { c: c.c, w: c.w, p: pt(ev) };
     strokes.push(cur);
+    redraw();
   });
   pad.addEventListener('pointermove', ev => {
     if (!cur) return;
@@ -338,7 +455,7 @@ async function drawStroke(existing) {
 
   const status = el('span', { class: 'dim', style: 'font-size:12px' }, 'Saved');
   const save = async () => {
-    status.textContent = 'Saving…';
+    status.textContent = 'Saving\u2026';
     try {
       await M.api.saveText(entry.id, { text: JSON.stringify(strokes), endsAt: new Date().toISOString() });
       if (titleIn.value !== entry.title) await M.api.patch(entry.id, { title: titleIn.value });
@@ -355,7 +472,7 @@ async function drawStroke(existing) {
     foot: [status, el('div', { class: 'grow' }), done], onClose: () => { ro.disconnect(); save(); } });
   done.onclick = async () => { await save(); m.close(); };
   const ro = new ResizeObserver(fit); ro.observe(pad);
-  fit();
+  paintSlots(); syncEditor(); fit();
 }
 
 M.capture = { record, importImage, uploadImage, writeMarkdown, drawStroke, Uploader,

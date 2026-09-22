@@ -66,6 +66,9 @@ requests without copying through application memory.
 
 ## Documentation
 
+- [`PROJECT.md`](PROJECT.md) — orientation for anyone (or any AI) picking the
+  codebase up: the non-obvious rules, the data model, and why things are the
+  way they are
 - [`Server/README.md`](Server/README.md) — configuration, API reference,
   storage model, package layout
 - [`Client/README.md`](Client/README.md) — file layout, the two views,

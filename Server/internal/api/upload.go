@@ -57,9 +57,13 @@ func (s *Server) handleChunk(w http.ResponseWriter, r *http.Request) {
 	}
 	// Keep endsAt moving so an in-progress recording renders with a growing
 	// block on the timeline instead of a zero-width sliver.
+	now := time.Now().UTC()
 	s.db.Entries.UpdateByID(r.Context(), e.ID, bson.M{"$set": bson.M{
-		"size": size, "endsAt": time.Now().UTC(), "updatedAt": time.Now().UTC(),
+		"size": size, "endsAt": now, "updatedAt": now,
 	}})
+	// Let other devices watch the block grow while the take is still running.
+	e.Size, e.EndsAt, e.UpdatedAt = size, now, now
+	s.emitEntry(e.UserID, e)
 	send(w, http.StatusOK, map[string]any{"offset": size})
 }
 
@@ -163,6 +167,7 @@ func (s *Server) handleFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, _ := s.load(r, e.ID)
+	s.emitEntry(e.UserID, out)
 	send(w, http.StatusOK, out)
 }
 
@@ -201,6 +206,9 @@ func (s *Server) handleText(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.db.Entries.UpdateByID(r.Context(), e.ID, bson.M{"$set": set}); err != nil {
 		fail(w, http.StatusInternalServerError, "could not save")
 		return
+	}
+	if fresh, err := s.load(r, e.ID); err == nil {
+		s.emitEntry(e.UserID, fresh)
 	}
 	send(w, http.StatusOK, map[string]any{"ok": true, "savedAt": now, "size": len(req.Text)})
 }
@@ -292,5 +300,6 @@ func (s *Server) handleEdit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	res, _ := s.load(r, e.ID)
+	s.emitEntry(e.UserID, res)
 	send(w, http.StatusOK, res)
 }

@@ -27,10 +27,12 @@ type Server struct {
 	db     *db.DB
 	blobs  *store.Store
 	bundle *bundler
+	events *hub
 }
 
 func New(cfg config.Config, database *db.DB, blobs *store.Store) *Server {
-	return &Server{cfg: cfg, db: database, blobs: blobs, bundle: newBundler(cfg.ClientDir, cfg.Dev)}
+	return &Server{cfg: cfg, db: database, blobs: blobs,
+		bundle: newBundler(cfg.ClientDir, cfg.Dev), events: newHub()}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -55,6 +57,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/entries/{id}/text", s.auth(s.handleText))
 	// Server-side trim / crop / compress.
 	mux.HandleFunc("POST /api/entries/{id}/edit", s.auth(s.handleEdit))
+
+	// Live change feed, so one account recording on several devices stays in
+	// sync without any of them polling.
+	mux.HandleFunc("GET /api/events", s.auth(s.handleEvents))
 
 	mux.HandleFunc("GET /api/blob/{hash}", s.auth(s.handleBlob))
 	mux.HandleFunc("GET /api/stats", s.auth(s.handleStats))
@@ -109,8 +115,11 @@ var gzPool = sync.Pool{New: func() any { w, _ := gzip.NewWriterLevel(io.Discard,
 // and gzipping them would break Range support for no gain.
 func compressing(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Blobs are already compressed and gzip would break Range; the event
+		// stream must not be buffered by a compressor at all.
 		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") ||
-			strings.HasPrefix(r.URL.Path, "/api/blob/") {
+			strings.HasPrefix(r.URL.Path, "/api/blob/") ||
+			r.URL.Path == "/api/events" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -141,7 +150,7 @@ func logging(next http.Handler) http.Handler {
 		start := time.Now()
 		sw := &statusWriter{w, 200}
 		next.ServeHTTP(sw, r)
-		if !strings.HasPrefix(r.URL.Path, "/api/blob/") || sw.code >= 400 {
+		if (!strings.HasPrefix(r.URL.Path, "/api/blob/") && r.URL.Path != "/api/events") || sw.code >= 400 {
 			log.Printf("%s %s %d %s", r.Method, r.URL.Path, sw.code, time.Since(start).Round(time.Millisecond))
 		}
 	})

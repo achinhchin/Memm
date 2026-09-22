@@ -106,9 +106,25 @@ POST   /api/entries/{id}/finish    commit, probe, thumbnail/waveform
 PUT    /api/entries/{id}/text      markdown / stroke autosave
 POST   /api/entries/{id}/edit      server-side trim / crop / compress
 
+GET    /api/events                 SSE feed of this account's entry changes
 GET    /api/blob/{sha256}          Range-capable, immutable, owner-only
 GET    /api/stats
 ```
+
+`GET /api/entries` also accepts `minMs`/`maxMs` (duration bounds), `tag`
+(comma-separated, matching any) and `status`.
+
+### Live updates across devices
+
+One account can record from several devices at once, so `GET /api/events` is a
+per-user Server-Sent Events feed of created, changed and deleted entries.
+Another device sees a recording appear and its block grow without polling.
+
+Uploads deliberately stay on ordinary HTTP rather than moving to a WebSocket:
+chunked `PUT`s get independent retry, HTTP/2 multiplexing, native Range
+semantics and resumability for free, where one socket would serialise
+transfers and force us to reimplement framing, backpressure and resume. Only
+the notifications need pushing, and SSE reconnects on its own.
 
 `GET /api/entries?from&to` returns entries **overlapping** the window rather
 than contained in it, so a long recording stays visible when you zoom inside

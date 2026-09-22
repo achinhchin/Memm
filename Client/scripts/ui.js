@@ -5,9 +5,13 @@ const ic = M.icons;
 const el = (tag, attrs = {}, html) => {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
+    if (v === false && /^(aria|data)-/.test(k)) { n.setAttribute(k, 'false'); continue; }
     if (v == null || v === false) continue;
     if (k === 'class') n.className = v;
     else if (k.startsWith('on')) n.addEventListener(k.slice(2).toLowerCase(), v);
+    // A bare attribute (disabled, muted) is spelled as the empty string, but
+    // aria-*/data-* carry a literal "true"/"false" that selectors match on.
+    else if (v === true && /^(aria|data)-/.test(k)) n.setAttribute(k, 'true');
     else n.setAttribute(k, v === true ? '' : v);
   }
   if (html != null) n.innerHTML = html;

@@ -288,6 +288,7 @@ M.timeline = { mount(root) {
 
   return {
     render: build,
+    fit: fitAll,
     destroy() { ro.disconnect(); clearInterval(tick); document.removeEventListener('keydown', onKey); cancelAnimationFrame(frame); },
   };
 }};
