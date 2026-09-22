@@ -27,6 +27,10 @@ M.auth = { mount(root, onDone) {
 
     $('#sw', card).onclick = () => { mode = isNew ? 'login' : 'signup'; render(); };
 
+    // Look the fields up explicitly rather than through the form's named
+    // properties, so the handler does not depend on that DOM behaviour.
+    const userIn = $('#u', card), passIn = $('#p', card);
+
     card.onsubmit = async ev => {
       ev.preventDefault();
       const btn = card.querySelector('button[type=submit]');
@@ -35,8 +39,8 @@ M.auth = { mount(root, onDone) {
       const prev = btn.innerHTML;
       btn.innerHTML = '<span class="spin"></span>';
       const body = {
-        username: card.username.value.trim(),
-        password: card.password.value,
+        username: userIn.value.trim(),
+        password: passIn.value,
         tzOffset: M.ui.localOffset(),
       };
       try {
@@ -44,7 +48,7 @@ M.auth = { mount(root, onDone) {
       } catch (e) {
         err.textContent = e.message;
         btn.disabled = false; btn.innerHTML = prev;
-        card.password.focus(); card.password.select();
+        passIn.focus(); passIn.select();
       }
     };
     root.append(card);
