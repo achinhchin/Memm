@@ -1,0 +1,61 @@
+.app-boot{display:grid;place-items:center;height:100dvh}
+.shell{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+
+/* ---- top bar ------------------------------------------------------------ */
+.nav{
+  height:var(--nav-h);flex:none;display:flex;align-items:center;gap:10px;
+  padding:0 14px;padding-top:env(safe-area-inset-top);
+  background:var(--glass);backdrop-filter:blur(20px) saturate(160%);
+  -webkit-backdrop-filter:blur(20px) saturate(160%);
+  border-bottom:1px solid var(--glass-line);z-index:30;
+}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:-.01em}
+.brand svg{color:var(--accent)}
+.nav-spacer{flex:1}
+
+/* segmented view switch */
+.seg{display:flex;padding:3px;gap:2px;background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r-full)}
+.seg button{
+  display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:var(--r-full);
+  color:var(--text-2);font-size:13px;font-weight:500;transition:color var(--fast) var(--ease),background var(--fast) var(--ease);
+}
+.seg button:hover{color:var(--text)}
+.seg button[aria-selected="true"]{background:var(--surface-2);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.3)}
+
+/* ---- filter strip ------------------------------------------------------- */
+.filters{
+  flex:none;display:flex;align-items:center;gap:8px;padding:10px 14px;
+  border-bottom:1px solid var(--line-soft);overflow-x:auto;scrollbar-width:none;
+}
+.filters::-webkit-scrollbar{display:none}
+
+.main{flex:1;min-height:0;position:relative}
+
+/* ---- capture dock ------------------------------------------------------- */
+.dock{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(20px + env(safe-area-inset-bottom));z-index:25;
+  display:flex;gap:4px;padding:6px;
+  background:var(--glass);backdrop-filter:blur(20px) saturate(160%);
+  -webkit-backdrop-filter:blur(20px) saturate(160%);
+  border:1px solid var(--glass-line);border-radius:var(--r-full);box-shadow:var(--shadow);
+}
+.dock button{
+  display:grid;place-items:center;width:44px;height:44px;border-radius:var(--r-full);
+  color:var(--text-2);transition:color var(--fast) var(--ease),background var(--fast) var(--ease),transform var(--fast) var(--ease);
+}
+.dock button:hover{color:var(--text);background:var(--surface-2)}
+.dock button:active{transform:scale(.92)}
+.dock button[data-kind="audio"]:hover{color:var(--audio)}
+.dock button[data-kind="video"]:hover{color:var(--video)}
+.dock button[data-kind="image"]:hover{color:var(--image)}
+.dock button[data-kind="markdown"]:hover{color:var(--markdown)}
+.dock button[data-kind="stroke"]:hover{color:var(--stroke)}
+
+@media (max-width:600px){
+  .nav{padding:0 10px;gap:6px}
+  .brand span{display:none}
+  .seg button span{display:none}
+  .seg button{padding:6px 10px}
+  .dock{width:calc(100% - 24px);justify-content:space-around}
+}
