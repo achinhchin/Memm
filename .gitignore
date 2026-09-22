@@ -1,0 +1,23 @@
+# secrets & local config
+.env
+*.local
+
+# TLS material
+certs/*.pem
+certs/*.key
+certs/*.crt
+
+# blob storage & uploads
+data/
+!data/.gitkeep
+
+# build output
+bin/
+memm
+*.test
+*.out
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
