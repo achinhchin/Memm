@@ -11,9 +11,9 @@ certs/*.crt
 data/
 !data/.gitkeep
 
-# build output
-bin/
-memm
+# build output (anchored: a bare 'memm' would also exclude cmd/memm/)
+/bin/
+/memm
 *.test
 *.out
 

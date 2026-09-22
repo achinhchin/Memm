@@ -42,11 +42,11 @@ type Session struct {
 // sha256); markdown and stroke data are small and mutate on every autosave, so
 // they are kept inline in Text to avoid rewriting blobs constantly.
 type Entry struct {
-	ID       bson.ObjectID `bson:"_id,omitempty"  json:"id"`
-	UserID   bson.ObjectID `bson:"userId"         json:"-"`
-	Kind     string        `bson:"kind"           json:"kind"`
-	Title    string        `bson:"title"          json:"title"`
-	Status   string        `bson:"status"         json:"status"`
+	ID     bson.ObjectID `bson:"_id,omitempty"  json:"id"`
+	UserID bson.ObjectID `bson:"userId"         json:"-"`
+	Kind   string        `bson:"kind"           json:"kind"`
+	Title  string        `bson:"title"          json:"title"`
+	Status string        `bson:"status"         json:"status"`
 
 	Blob string `bson:"blob,omitempty"  json:"blob,omitempty"` // sha256 hex
 	Mime string `bson:"mime,omitempty"  json:"mime,omitempty"`
