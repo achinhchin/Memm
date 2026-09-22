@@ -32,7 +32,8 @@ cp .env.example .env
 go run ./cmd/memm
 ```
 
-Open <https://localhost:5050> and create an account. Your browser will warn
+Open <https://localhost:5050> and create an account — just a username and a
+password. Your browser will warn
 about the self-signed certificate; accept it. To skip TLS while testing, set
 `TLS=0` in `.env` and use <http://localhost:5050>.
 

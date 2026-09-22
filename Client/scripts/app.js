@@ -47,7 +47,7 @@ const render = () => {
   search.append(searchIn);
   nav.append(search);
 
-  const acct = el('button', { class: 'btn btn-ghost btn-icon', title: state.user.email }, ic('user', 17));
+  const acct = el('button', { class: 'btn btn-ghost btn-icon', title: state.user.username }, ic('user', 17));
   acct.onclick = account;
   nav.append(acct);
 
@@ -105,8 +105,7 @@ const account = () => {
   const body = el('div', { class: 'col', style: 'gap:12px' });
   body.innerHTML = `
     <div class="meta-grid card" style="padding:12px">
-      <dt>Name</dt><dd>${esc(state.user.name || '—')}</dd>
-      <dt>Email</dt><dd>${esc(state.user.email)}</dd>
+      <dt>Username</dt><dd>${esc(state.user.username)}</dd>
       <dt>Time zone</dt><dd>${fmtTZ(M.ui.localOffset())}</dd>
       <dt>Entries loaded</dt><dd>${state.entries.size}</dd>
     </div>

@@ -11,10 +11,11 @@ M.auth = { mount(root, onDone) {
     const card = el('form', { class: 'auth glass', autocomplete: 'on' }, `
       <div class="auth-logo">${ic('memm', 21)}<span>Memm</span></div>
       <p class="sub">${isNew ? 'Start a journal that remembers when, not just what.' : 'Welcome back.'}</p>
-      ${isNew ? `<div class="field"><label for="n">Name</label>
-        <input class="input" id="n" name="name" autocomplete="name" placeholder="Optional"></div>` : ''}
-      <div class="field"><label for="e">Email</label>
-        <input class="input" id="e" name="email" type="email" required autocomplete="email" placeholder="you@example.com"></div>
+      <div class="field"><label for="u">Username</label>
+        <input class="input" id="u" name="username" required autocomplete="username"
+          autocapitalize="none" autocorrect="off" spellcheck="false"
+          minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}"
+          placeholder="${isNew ? '3–32 letters, digits, . _ -' : 'Your username'}"></div>
       <div class="field"><label for="p">Password</label>
         <input class="input" id="p" name="password" type="password" required minlength="8"
           autocomplete="${isNew ? 'new-password' : 'current-password'}" placeholder="${isNew ? 'At least 8 characters' : '••••••••'}"></div>
@@ -34,9 +35,8 @@ M.auth = { mount(root, onDone) {
       const prev = btn.innerHTML;
       btn.innerHTML = '<span class="spin"></span>';
       const body = {
-        email: card.email.value.trim(),
+        username: card.username.value.trim(),
         password: card.password.value,
-        name: card.name?.value.trim() || '',
         tzOffset: M.ui.localOffset(),
       };
       try {

@@ -75,13 +75,22 @@ the clock it actually felt like at the time.
 
 ## API
 
+An account is a **username and a password**, nothing else. Usernames are 3–32
+characters of letters, digits, dots, dashes or underscores, stored folded to
+lower case so capitalisation cannot split an account in two.
+
 All routes except signup/login require the `memm_session` cookie
 (httpOnly, `Secure` under TLS, argon2id-hashed passwords, opaque tokens with a
-MongoDB TTL index so logout and expiry are immediate).
+MongoDB TTL index so logout and expiry are immediate). A failed login returns
+the same message and takes comparable time whether or not the username exists.
+
+A database created before accounts dropped the email field is migrated on
+startup: the old unique index is dropped, `email` is renamed to `username`,
+and the stale display name is removed, so existing logins keep working.
 
 ```
-POST   /api/auth/signup            {email,password,name,tzOffset}
-POST   /api/auth/login             {email,password,tzOffset}
+POST   /api/auth/signup            {username,password,tzOffset}
+POST   /api/auth/login             {username,password,tzOffset}
 POST   /api/auth/logout
 GET    /api/auth/me
 

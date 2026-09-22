@@ -39,10 +39,32 @@ func Open(ctx context.Context, uri, name string) (*DB, error) {
 	return db, db.ensureIndexes(ctx)
 }
 
+// migrateEmailToUsername moves databases created before accounts dropped the
+// email field. Without it the old unique index on email would reject every new
+// account (they all have no email, and a unique index rejects the second
+// missing value), and the new unique index on username could not be built.
+func (d *DB) migrateEmailToUsername(ctx context.Context) error {
+	// Drop the old index before renaming, not after. Renaming clears the email
+	// field one document at a time, and a unique index treats a second missing
+	// value as a duplicate of the first, so the rename would fail partway
+	// through with E11000 on { email: null }.
+	// DropOne errors when the index is already gone, which is the normal case
+	// on every start after the first.
+	_ = d.Users.Indexes().DropOne(ctx, "email_1")
+	_, err := d.Users.UpdateMany(ctx,
+		bson.M{"email": bson.M{"$exists": true}, "username": bson.M{"$exists": false}},
+		bson.M{"$rename": bson.M{"email": "username"}, "$unset": bson.M{"name": ""}},
+	)
+	return err
+}
+
 func (d *DB) ensureIndexes(ctx context.Context) error {
+	if err := d.migrateEmailToUsername(ctx); err != nil {
+		return err
+	}
 	uniq := options.Index().SetUnique(true)
 	if _, err := d.Users.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{{Key: "email", Value: 1}}, Options: uniq}); err != nil {
+		Keys: bson.D{{Key: "username", Value: 1}}, Options: uniq}); err != nil {
 		return err
 	}
 	// Sessions self-expire; Mongo reaps them, no sweeper goroutine needed.

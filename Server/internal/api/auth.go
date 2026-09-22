@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,11 +14,18 @@ import (
 )
 
 type credentials struct {
-	Email    string `json:"email"`
+	Username string `json:"username"`
 	Password string `json:"password"`
-	Name     string `json:"name"`
 	TZOffset int    `json:"tzOffset"`
 }
+
+// Usernames are the only identifier an account has, so they are kept short,
+// unambiguous and case-insensitive: letters, digits, and separators that
+// cannot be confused for whitespace.
+var usernameRe = regexp.MustCompile(`^[a-z0-9._-]{3,32}$`)
+
+// normalizeUsername folds case and trims, so "Ada" and "ada " are one account.
+func normalizeUsername(v string) string { return strings.ToLower(strings.TrimSpace(v)) }
 
 func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 	var c credentials
@@ -25,9 +33,10 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "malformed request")
 		return
 	}
-	c.Email = strings.ToLower(strings.TrimSpace(c.Email))
-	if !strings.Contains(c.Email, "@") {
-		fail(w, http.StatusBadRequest, "enter a valid email")
+	c.Username = normalizeUsername(c.Username)
+	if !usernameRe.MatchString(c.Username) {
+		fail(w, http.StatusBadRequest,
+			"username must be 3-32 characters, using letters, digits, dots, dashes or underscores")
 		return
 	}
 	if len(c.Password) < 8 {
@@ -39,18 +48,14 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, "could not secure password")
 		return
 	}
-	name := strings.TrimSpace(c.Name)
-	if name == "" {
-		name, _, _ = strings.Cut(c.Email, "@")
-	}
 	u := models.User{
-		Email: c.Email, Name: name, Hash: hash,
+		Username: c.Username, Hash: hash,
 		TZOffset: c.TZOffset, CreatedAt: time.Now().UTC(),
 	}
 	res, err := s.db.Users.InsertOne(r.Context(), u)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			fail(w, http.StatusConflict, "that email is already registered")
+			fail(w, http.StatusConflict, "that username is taken")
 			return
 		}
 		fail(w, http.StatusInternalServerError, "could not create account")
@@ -68,16 +73,16 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	var u models.User
 	err := s.db.Users.FindOne(r.Context(),
-		bson.M{"email": strings.ToLower(strings.TrimSpace(c.Email))}).Decode(&u)
+		bson.M{"username": normalizeUsername(c.Username)}).Decode(&u)
 	// Same message and comparable timing for both failure modes so the
-	// endpoint does not confirm whether an email is registered.
+	// endpoint does not confirm whether a username is registered.
 	if err != nil {
 		auth.Verify(c.Password, "$argon2id$v=19$m=65536,t=2,p=4$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-		fail(w, http.StatusUnauthorized, "incorrect email or password")
+		fail(w, http.StatusUnauthorized, "incorrect username or password")
 		return
 	}
 	if !auth.Verify(c.Password, u.Hash) {
-		fail(w, http.StatusUnauthorized, "incorrect email or password")
+		fail(w, http.StatusUnauthorized, "incorrect username or password")
 		return
 	}
 	if c.TZOffset != u.TZOffset {

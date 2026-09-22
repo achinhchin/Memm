@@ -23,12 +23,13 @@ const (
 )
 
 type User struct {
-	ID        bson.ObjectID `bson:"_id,omitempty"       json:"id"`
-	Email     string        `bson:"email"               json:"email"`
-	Name      string        `bson:"name"                json:"name"`
-	Hash      string        `bson:"hash"                json:"-"`
-	TZOffset  int           `bson:"tzOffset"            json:"tzOffset"` // minutes east of UTC
-	CreatedAt time.Time     `bson:"createdAt"           json:"createdAt"`
+	ID bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	// Username is stored folded to lower case; it is the only identifier an
+	// account has, so uniqueness must not depend on capitalisation.
+	Username  string    `bson:"username"  json:"username"`
+	Hash      string    `bson:"hash"      json:"-"`
+	TZOffset  int       `bson:"tzOffset"  json:"tzOffset"` // minutes east of UTC
+	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
 }
 
 type Session struct {
